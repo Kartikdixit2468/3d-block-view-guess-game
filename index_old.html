@@ -1,0 +1,893 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Math Bridges: 3D Views Explorer!</title>
+    <!-- Tailwind CSS for rapid UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for dragging/rotating -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Canvas Confetti for celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap");
+
+      body {
+        font-family: "Nunito", sans-serif;
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        overflow: hidden; /* Prevent scrolling, act like an app */
+        touch-action: none;
+      }
+
+      h1,
+      h2,
+      h3,
+      .brand-font {
+        font-family: "Fredoka One", cursive;
+      }
+
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        border-radius: 24px;
+      }
+
+      .mcq-btn {
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: white;
+        border: 4px solid transparent;
+      }
+
+      .mcq-btn:hover {
+        transform: scale(1.05) translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      }
+
+      .mcq-btn.correct {
+        border-color: #10b981;
+        background-color: #d1fae5;
+      }
+
+      .mcq-btn.wrong {
+        border-color: #ef4444;
+        background-color: #fee2e2;
+        animation: shake 0.4s;
+      }
+
+      @keyframes shake {
+        0% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-8px);
+        }
+        50% {
+          transform: translateX(8px);
+        }
+        75% {
+          transform: translateX(-8px);
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      #canvas-container {
+        position: relative;
+        cursor: grab;
+        width: 100%;
+        height: 100%;
+      }
+
+      #canvas-container:active {
+        cursor: grabbing;
+      }
+
+      /* Responsive Layout Adjustments to prevent scrolling */
+      @media (max-width: 768px) {
+        .game-layout {
+          flex-direction: column;
+        }
+        .left-panel {
+          flex: none;
+          height: 45vh; /* Fixed height for 3D area on mobile */
+        }
+        .right-panel {
+          flex: 1;
+          min-height: 0; /* Allows flex children to shrink */
+        }
+      }
+    </style>
+  </head>
+  <body class="h-screen w-screen flex flex-col text-gray-800">
+    <!-- Header -->
+    <header
+      class="w-full p-3 md:p-4 flex justify-between items-center glass-panel rounded-none z-10 relative shrink-0"
+    >
+      <div class="flex items-center gap-2 md:gap-3">
+        <div
+          class="w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-sky-500"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+            />
+            <path d="m3.3 7 8.7 5 8.7-5" />
+            <path d="M12 22V12" />
+          </svg>
+        </div>
+        <h1 class="text-xl md:text-3xl text-sky-600 drop-shadow-sm truncate">
+          Shape Explorer!
+        </h1>
+      </div>
+      <div
+        class="text-lg md:text-xl brand-font bg-white px-4 py-2 rounded-full shadow-sm text-sky-500 whitespace-nowrap"
+      >
+        Level: <span id="level-display">1</span>/<span id="total-levels"
+          >5</span
+        >
+      </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main
+      class="flex-1 flex game-layout p-3 md:p-6 gap-3 md:gap-6 max-h-full overflow-hidden min-h-0"
+    >
+      <!-- Left Side: 3D Interaction -->
+      <section
+        class="left-panel flex-1 glass-panel flex flex-col overflow-hidden relative shadow-lg"
+      >
+        <!-- Instructions Overlay -->
+        <div
+          class="absolute top-2 left-2 right-2 md:top-4 md:left-4 md:right-4 z-10 flex justify-between pointer-events-none"
+        >
+          <div
+            class="bg-white/90 px-3 py-1.5 rounded-2xl shadow font-bold text-xs md:text-sm text-gray-600 pointer-events-auto border-2 border-sky-100 flex gap-2 items-center"
+          >
+            <span class="flex items-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="inline mr-1"
+              >
+                <path d="M22 14a8 8 0 0 1-8 8" />
+                <path d="M18 11v-1a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                <path d="M14 10V9a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v1" />
+                <path d="M10 9.5V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v10" />
+                <path
+                  d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                />
+              </svg>
+              Drag to look!
+            </span>
+          </div>
+        </div>
+
+        <!-- 3D Canvas -->
+        <div
+          id="canvas-container"
+          class="flex-1 rounded-2xl overflow-hidden min-h-0"
+        ></div>
+
+        <!-- Teacher Prompt -->
+        <div
+          class="bg-sky-600 text-white p-3 md:p-6 text-center shadow-inner relative overflow-hidden shrink-0"
+        >
+          <div
+            class="absolute top-0 left-0 w-full h-full opacity-20"
+            style="
+              background-image: radial-gradient(
+                circle,
+                white 2px,
+                transparent 2px
+              );
+              background-size: 20px 20px;
+            "
+          ></div>
+          <h2 id="question-text" class="text-xl md:text-4xl relative z-10">
+            Which one is the TOP view?
+          </h2>
+        </div>
+      </section>
+
+      <!-- Right Side: MCQ Options -->
+      <section
+        class="right-panel w-full md:w-[40%] glass-panel p-3 md:p-6 flex flex-col gap-3 md:gap-4 shadow-lg overflow-hidden"
+      >
+        <h3
+          class="text-lg md:text-xl font-bold text-gray-700 text-center shrink-0"
+        >
+          Choose the correct 2D shape:
+        </h3>
+
+        <!-- Guaranteed 2x2 Grid, taking remaining space -->
+        <div
+          id="options-container"
+          class="grid grid-cols-2 gap-2 md:gap-4 flex-1 min-h-0 options-grid"
+        >
+          <!-- Buttons will be injected here by JS -->
+        </div>
+
+        <!-- Feedback / Next Level Area -->
+        <div
+          id="feedback-area"
+          class="hidden flex-col items-center justify-center flex-1 min-h-0 w-full p-4 bg-white rounded-2xl border-4 border-sky-100"
+        >
+          <p
+            id="feedback-text"
+            class="text-xl md:text-2xl brand-font mb-4 text-center"
+          ></p>
+          <button
+            id="next-btn"
+            class="brand-font flex items-center justify-center bg-sky-500 hover:bg-sky-400 text-white text-lg md:text-xl py-2 md:py-3 px-6 md:px-8 rounded-full shadow-[0_6px_0_#0ea5e9] hover:shadow-[0_2px_0_#0ea5e9] hover:translate-y-1 transition-all shrink-0"
+          >
+            Next Challenge!
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="inline ml-1"
+            >
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      /**
+       * ENGINEER & TEACHER DESIGN:
+       * 1. Audio Synthesizer: Fun sounds dynamically generated.
+       * 2. Ground/Grid & Human Avatar: Provides visual context for the 'Front'.
+       * 3. Fixed Zoom: OrbitControls zooming disabled to prevent visual confusion.
+       */
+
+      const CONSTANT_COLOR = "#FBBF24"; // Amber/Yellow color for everything
+
+      // Grid format for 2D options: Array of rows, 1 = colored block, 0 = empty space.
+      const levels = [
+        {
+          // Level 1: Simple L-Shape
+          blocks: [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+            [0, 2, 0],
+          ],
+          question: "Which one is the FRONT view?",
+          options: [
+            {
+              grid: [
+                [1, 0],
+                [1, 0],
+                [1, 1],
+              ],
+              correct: true,
+            }, // L shape
+            { grid: [[1, 1, 1]], correct: false }, // Flat line
+            {
+              grid: [
+                [1, 1],
+                [1, 1],
+              ],
+              correct: false,
+            }, // Square
+            {
+              grid: [
+                [0, 1],
+                [0, 1],
+                [1, 1],
+              ],
+              correct: false,
+            }, // Reversed L
+          ],
+        },
+        {
+          // Level 2: The U-Shape (Looking from Top)
+          blocks: [
+            [0, 0, 0],
+            [0, 1, 0], // Left pillar
+            [1, 0, 0], // Middle base
+            [2, 0, 0],
+            [2, 1, 0], // Right pillar
+          ],
+          question: "Which one is the TOP view?",
+          options: [
+            { grid: [[1, 1, 1]], correct: true }, // Just a row of 3
+            {
+              grid: [
+                [1, 0, 1],
+                [1, 1, 1],
+              ],
+              correct: false,
+            },
+            { grid: [[1], [1], [1]], correct: false },
+            {
+              grid: [
+                [1, 1],
+                [1, 1],
+              ],
+              correct: false,
+            },
+          ],
+        },
+        {
+          // Level 3: Steps (Looking from Side)
+          blocks: [
+            [0, 0, 0],
+            [1, 0, 0],
+            [2, 0, 0],
+            [0, 1, 0],
+            [1, 1, 0],
+            [0, 2, 0],
+          ],
+          question: "Which one is the SIDE (Right) view?",
+          options: [
+            { grid: [[1], [1], [1]], correct: true }, // 3 tall pillar
+            {
+              grid: [
+                [1, 0, 0],
+                [1, 1, 0],
+                [1, 1, 1],
+              ],
+              correct: false,
+            },
+            { grid: [[1, 1, 1]], correct: false },
+            {
+              grid: [
+                [1, 1],
+                [1, 1],
+              ],
+              correct: false,
+            },
+          ],
+        },
+        {
+          // Level 4: 3D Corner (Looking from Top)
+          blocks: [
+            [0, 0, 0],
+            [1, 0, 0],
+            [2, 0, 0],
+            [0, 0, 1],
+            [0, 0, 2],
+          ],
+          question: "Which one is the TOP view?",
+          options: [
+            {
+              grid: [
+                [1, 0, 0],
+                [1, 0, 0],
+                [1, 1, 1],
+              ],
+              correct: true,
+            }, // L shape flat on ground
+            {
+              grid: [
+                [1, 1, 1],
+                [0, 0, 1],
+                [0, 0, 1],
+              ],
+              correct: false,
+            },
+            { grid: [[1, 1, 1]], correct: false },
+            {
+              grid: [
+                [1, 1],
+                [1, 1],
+              ],
+              correct: false,
+            },
+          ],
+        },
+        {
+          // Level 5: T-Shape (Looking from Front)
+          blocks: [
+            [1, 0, 0],
+            [1, 1, 0],
+            [0, 2, 0],
+            [1, 2, 0],
+            [2, 2, 0],
+          ],
+          question: "Which one is the FRONT view?",
+          options: [
+            {
+              grid: [
+                [1, 1, 1],
+                [0, 1, 0],
+                [0, 1, 0],
+              ],
+              correct: true,
+            }, // T shape
+            {
+              grid: [
+                [0, 1, 0],
+                [0, 1, 0],
+                [1, 1, 1],
+              ],
+              correct: false,
+            }, // Upside down T
+            {
+              grid: [
+                [1, 0, 0],
+                [1, 1, 1],
+                [1, 0, 0],
+              ],
+              correct: false,
+            },
+            {
+              grid: [
+                [1, 1, 1],
+                [1, 1, 1],
+              ],
+              correct: false,
+            },
+          ],
+        },
+      ];
+
+      let currentLevelIndex = 0;
+
+      // --- 2. AUDIO SYNTHESIZER ---
+      function playSound(type) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          if (type === "correct") {
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(
+              1046.5,
+              ctx.currentTime + 0.1,
+            );
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+          } else if (type === "wrong") {
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(200, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(
+              150,
+              ctx.currentTime + 0.2,
+            );
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+          } else if (type === "win") {
+            osc.type = "square";
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
+            const notes = [440, 554.37, 659.25, 880];
+            notes.forEach((freq, i) => {
+              osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
+            });
+            osc.start();
+            osc.stop(ctx.currentTime + 1);
+          }
+        } catch (e) {
+          console.log("Audio skipped");
+        }
+      }
+
+      // --- 3. THREE.JS ENGINE ---
+      const container = document.getElementById("canvas-container");
+      const scene = new THREE.Scene();
+      // Give it a bright, sky-like background
+      scene.background = new THREE.Color(0xdcf0fb);
+      // Add a subtle fog to blend the grid into the distance
+      scene.fog = new THREE.FogExp2(0xdcf0fb, 0.03);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        100,
+      );
+      camera.position.set(6, 6, 8);
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+      });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      // Removed shadowMap enabling
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      // DISABLED ZOOM per request
+      controls.enableZoom = false;
+      // Restrict camera so they can't go under the floor
+      controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+      // Lighting (Configured for shadows)
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      // Place light
+      dirLight.position.set(-8, 15, 10);
+      // Removed light shadow properties
+      scene.add(dirLight);
+
+      // Ground Plane & Grid
+      const planeGeo = new THREE.PlaneGeometry(100, 100);
+      const planeMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+      const ground = new THREE.Mesh(planeGeo, planeMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = 0;
+      // Removed ground shadow receiving
+      scene.add(ground);
+
+      const gridHelper = new THREE.GridHelper(40, 40, 0x94a3b8, 0xcbd5e1);
+      gridHelper.position.y = 0.01; // Slightly above ground to prevent z-fighting
+      scene.add(gridHelper);
+
+      let shapeGroup = new THREE.Group();
+      scene.add(shapeGroup);
+
+      let humanSilhouette;
+
+      // Helper to create the lightweight stick figure
+      function createHuman() {
+        const group = new THREE.Group();
+        const mat = new THREE.MeshLambertMaterial({ color: 0x111111 }); // Dark silhouette
+
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mat);
+        head.position.y = 1.6;
+        group.add(head);
+
+        const body = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.12, 0.7),
+          mat,
+        );
+        body.position.y = 1.05;
+        group.add(body);
+
+        const armGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.6);
+        const armL = new THREE.Mesh(armGeo, mat);
+        armL.position.set(-0.2, 1.05, 0);
+        const armR = new THREE.Mesh(armGeo, mat);
+        armR.position.set(0.2, 1.05, 0);
+        group.add(armL);
+        group.add(armR);
+
+        const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.7);
+        const legL = new THREE.Mesh(legGeo, mat);
+        legL.position.set(-0.1, 0.35, 0);
+        const legR = new THREE.Mesh(legGeo, mat);
+        legR.position.set(0.1, 0.35, 0);
+        group.add(legL);
+        group.add(legR);
+
+        // Removed shadow traversal for human silhouette
+        return group;
+      }
+
+      humanSilhouette = createHuman();
+      scene.add(humanSilhouette);
+
+      // Materials setup for constant color
+      function getCubeMaterials() {
+        const solidMaterial = new THREE.MeshStandardMaterial({
+          color: CONSTANT_COLOR,
+          roughness: 0.4,
+        });
+        return Array(6).fill(solidMaterial);
+      }
+
+      const cubeGeo = new THREE.BoxGeometry(1, 1, 1);
+      const edgesGeo = new THREE.EdgesGeometry(cubeGeo);
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: 0x000000,
+        linewidth: 2,
+      });
+      const materials = getCubeMaterials();
+
+      function buildShape(blocksArray) {
+        // Clear existing
+        while (shapeGroup.children.length > 0) {
+          shapeGroup.remove(shapeGroup.children[0]);
+        }
+
+        let minX = Infinity,
+          maxX = -Infinity;
+        let minY = Infinity,
+          maxY = -Infinity;
+        let minZ = Infinity,
+          maxZ = -Infinity;
+
+        blocksArray.forEach((pos) => {
+          const [x, y, z] = pos;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+          if (z < minZ) minZ = z;
+          if (z > maxZ) maxZ = z;
+
+          const cube = new THREE.Mesh(cubeGeo, materials);
+          cube.position.set(x, y, z);
+          // Removed cube shadow casting and receiving
+
+          const edges = new THREE.LineSegments(edgesGeo, edgeMat);
+          edges.position.set(x, y, z);
+
+          shapeGroup.add(cube);
+          shapeGroup.add(edges);
+        });
+
+        // Center the group
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+
+        shapeGroup.children.forEach((child) => {
+          child.position.x -= centerX;
+          child.position.y -= centerY;
+          child.position.z -= centerZ;
+        });
+
+        // Position shape so its bottom rests exactly on the grid (y=0)
+        const height = maxY - minY + 1;
+        shapeGroup.position.y = height / 2;
+
+        // Position the Human silhouette strictly in "front" (+Z axis relative to the shape)
+        const depth = maxZ - minZ + 1;
+        humanSilhouette.position.set(0, 0, depth / 2 + 2); // Placed 2 units in front
+
+        // Adjust camera dynamically based on shape size so zooming isn't required
+        const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+        camera.position.set(
+          maxDim * 1.5 + 4,
+          maxDim * 1.5 + 4,
+          maxDim * 1.5 + 6,
+        );
+        controls.target.set(0, height / 2, 0); // Focus camera on the center of the shape
+        controls.update();
+      }
+
+      // Animation Loop (Stable view, just rendering + controls)
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update(); // necessary for damping
+        renderer.render(scene, camera);
+      }
+
+      // Handle Resize
+      window.addEventListener("resize", () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.render(scene, camera);
+      });
+
+      // --- 4. 2D CANVAS DRAWING ---
+      function drawGridOnCanvas(canvas, gridData, color) {
+        const ctx = canvas.getContext("2d");
+        const width = canvas.width;
+        const height = canvas.height;
+
+        ctx.clearRect(0, 0, width, height);
+
+        const rows = gridData.length;
+        const cols = Math.max(...gridData.map((r) => r.length));
+
+        const padding = 20;
+        const availableWidth = width - padding * 2;
+        const availableHeight = height - padding * 2;
+
+        const cellSize = Math.min(
+          availableWidth / cols,
+          availableHeight / rows,
+        );
+        const gridWidth = cols * cellSize;
+        const gridHeight = rows * cellSize;
+
+        const offsetX = (width - gridWidth) / 2;
+        const offsetY = (height - gridHeight) / 2;
+
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000";
+        ctx.fillStyle = color;
+
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < gridData[r].length; c++) {
+            if (gridData[r][c] === 1) {
+              const x = offsetX + c * cellSize;
+              const y = offsetY + r * cellSize;
+
+              ctx.beginPath();
+              ctx.roundRect(x, y, cellSize, cellSize, 4);
+              ctx.fill();
+              ctx.stroke();
+
+              ctx.fillStyle = "rgba(255,255,255,0.3)";
+              ctx.beginPath();
+              ctx.roundRect(x + 2, y + 2, cellSize - 4, cellSize / 3, 2);
+              ctx.fill();
+              ctx.fillStyle = color;
+            }
+          }
+        }
+      }
+
+      // --- 5. GAME LOGIC ---
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+      }
+
+      function loadLevel(index) {
+        const level = levels[index];
+        document.getElementById("level-display").innerText = index + 1;
+        document.getElementById("question-text").innerText = level.question;
+
+        const optsContainer = document.getElementById("options-container");
+        optsContainer.innerHTML = "";
+        document.getElementById("feedback-area").classList.add("hidden");
+        optsContainer.style.display = "grid";
+
+        buildShape(level.blocks);
+
+        let options = [...level.options];
+        shuffleArray(options);
+
+        options.forEach((opt, i) => {
+          const btn = document.createElement("button");
+          // Updated styles: flex-1 ensures it fills grid cells evenly without causing scrolls
+          btn.className =
+            "mcq-btn rounded-xl flex items-center justify-center p-2 relative w-full h-full";
+          btn.onclick = () => handleAnswer(opt.correct, btn);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = 200;
+          canvas.height = 200;
+          canvas.className = "w-full h-full object-contain pointer-events-none";
+
+          btn.appendChild(canvas);
+          optsContainer.appendChild(btn);
+
+          setTimeout(() => {
+            // Pass the constant color to the canvas rendering
+            drawGridOnCanvas(canvas, opt.grid, CONSTANT_COLOR);
+          }, 10);
+        });
+      }
+
+      function handleAnswer(isCorrect, btnElement) {
+        const buttons = document.querySelectorAll(".mcq-btn");
+        buttons.forEach((b) => (b.disabled = true));
+
+        if (isCorrect) {
+          playSound("correct");
+          btnElement.classList.add("correct");
+
+          const rect = btnElement.getBoundingClientRect();
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: {
+              x: (rect.left + rect.width / 2) / window.innerWidth,
+              y: (rect.top + rect.height / 2) / window.innerHeight,
+            },
+            colors: ["#3B82F6", "#EF4444", "#10B981", "#F59E0B"],
+          });
+
+          showFeedback(true);
+        } else {
+          playSound("wrong");
+          btnElement.classList.add("wrong");
+
+          setTimeout(() => {
+            btnElement.classList.remove("wrong");
+            buttons.forEach((b) => (b.disabled = false));
+          }, 500);
+        }
+      }
+
+      function showFeedback(isCorrect) {
+        document.getElementById("options-container").style.display = "none";
+        const feedbackArea = document.getElementById("feedback-area");
+        const feedbackText = document.getElementById("feedback-text");
+        const nextBtn = document.getElementById("next-btn");
+
+        feedbackArea.classList.remove("hidden");
+        feedbackArea.classList.add("flex");
+
+        if (currentLevelIndex < levels.length - 1) {
+          feedbackText.innerHTML = "Brilliant! You found it!";
+          feedbackText.className =
+            "text-xl md:text-2xl brand-font mb-4 text-center text-green-500";
+
+          nextBtn.innerHTML = `Next Challenge! <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline ml-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`;
+          nextBtn.onclick = () => {
+            currentLevelIndex++;
+            loadLevel(currentLevelIndex);
+          };
+        } else {
+          playSound("win");
+          feedbackText.innerHTML =
+            "AMAZING!<br><span class='text-lg text-gray-600'>You are a 3D Master!</span>";
+          feedbackText.className =
+            "text-2xl md:text-3xl brand-font mb-4 text-center text-sky-600";
+
+          nextBtn.innerHTML = `Play Again! <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline ml-1"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`;
+          nextBtn.onclick = () => {
+            currentLevelIndex = 0;
+            loadLevel(currentLevelIndex);
+          };
+
+          var duration = 3000;
+          var end = Date.now() + duration;
+          (function frame() {
+            confetti({
+              particleCount: 5,
+              angle: 60,
+              spread: 55,
+              origin: { x: 0 },
+              colors: ["#3B82F6", "#EF4444", "#10B981"],
+            });
+            confetti({
+              particleCount: 5,
+              angle: 120,
+              spread: 55,
+              origin: { x: 1 },
+              colors: ["#3B82F6", "#EF4444", "#10B981"],
+            });
+            if (Date.now() < end) {
+              requestAnimationFrame(frame);
+            }
+          })();
+        }
+      }
+
+      // --- INIT GAME ---
+      window.onload = () => {
+        document.getElementById("total-levels").innerText = levels.length;
+        loadLevel(0);
+        animate();
+      };
+    </script>
+  </body>
+</html>
