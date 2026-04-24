@@ -495,7 +495,34 @@
         return view.map((s) => ({ ...s, x: -s.x }));
       }
 
-      // --- NEW MUTATION LOGIC ---
+      // --- NEW MUTATION & DEDUPLICATION LOGIC ---
+
+      // Generates a strict, order-independent signature for a view so we can reliably detect visual duplicates
+      function getViewSignature(view) {
+        if (!view || view.length === 0) return "empty";
+
+        // 1. Remove hidden stacked blocks (same type & position) that might trick the stringifier
+        let uniqueShapes = [];
+        let seen = new Set();
+        for (let s of view) {
+          let key = `${s.type}_${round2(s.x)}_${round2(s.y)}_${s.w || 0}_${s.h || 0}_${s.r || 0}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueShapes.push(s);
+          }
+        }
+
+        // 2. Sort the shapes purely by coordinate so the array order is strictly consistent
+        const sortedView = uniqueShapes.sort((a, b) => {
+          if (Math.abs(a.x - b.x) > 0.01) return a.x - b.x;
+          if (Math.abs(a.y - b.y) > 0.01) return a.y - b.y;
+          if (a.type !== b.type) return a.type.localeCompare(b.type);
+          return 0;
+        });
+
+        return JSON.stringify(sortedView);
+      }
+
       // Deep clones a 2D view
       function cloneView(view) {
         return view.map((s) => ({ ...s }));
@@ -524,6 +551,10 @@
         let correctView = centerShapes2D(
           generateView(elements, targetViewType),
         );
+        let correctSig = getViewSignature(correctView);
+
+        let seenSignatures = new Set();
+        seenSignatures.add(correctSig);
 
         let pool = [
           generateView(elements, "front"),
@@ -541,18 +572,17 @@
           extendedPool.push(centerShapes2D(mirrorViewX(view)));
         }
 
-        let uniqueMap = new Map();
-        let correctStr = JSON.stringify(correctView);
+        let wrongViews = [];
 
-        // 1. Gather all strictly unique real views (ignoring duplicates like symmetrical M-shapes)
+        // 1. Gather all strictly unique real views
         for (let view of extendedPool) {
-          let str = JSON.stringify(view);
-          if (str !== correctStr && !uniqueMap.has(str) && view.length > 0) {
-            uniqueMap.set(str, view);
+          let sig = getViewSignature(view);
+          if (!seenSignatures.has(sig) && view.length > 0) {
+            seenSignatures.add(sig);
+            wrongViews.push(view);
           }
         }
 
-        let wrongViews = Array.from(uniqueMap.values());
         shuffleArray(wrongViews);
         wrongViews = wrongViews.slice(0, 3); // Take at most 3 standard distractor views
 
@@ -560,25 +590,24 @@
         let safetyCounter = 0;
         let sourceViewsForMutation = [correctView, ...wrongViews];
 
-        while (wrongViews.length < 3 && safetyCounter < 50) {
-          // Pick a random valid view and shift one of its blocks
+        while (wrongViews.length < 3 && safetyCounter < 100) {
           let baseView =
             sourceViewsForMutation[
               Math.floor(Math.random() * sourceViewsForMutation.length)
             ];
           let mutatedView = mutateView(baseView);
-          let mutStr = JSON.stringify(mutatedView);
+          let mutSig = getViewSignature(mutatedView);
 
           // If this mutated view is completely unique, add it to our distractor options
-          if (mutStr !== correctStr && !uniqueMap.has(mutStr)) {
-            uniqueMap.set(mutStr, mutatedView);
+          if (!seenSignatures.has(mutSig) && mutatedView.length > 0) {
+            seenSignatures.add(mutSig);
             wrongViews.push(mutatedView);
             sourceViewsForMutation.push(mutatedView);
           }
           safetyCounter++;
         }
 
-        // Absolute fallback for extreme edge cases (like a single block)
+        // 3. Absolute fallback for extreme edge cases (like a single block)
         while (wrongViews.length < 3) {
           let fallback = [
             {
@@ -597,7 +626,13 @@
               w: 1,
               h: 1,
             });
-          wrongViews.push(centerShapes2D(fallback));
+          fallback = centerShapes2D(fallback);
+
+          let fbSig = getViewSignature(fallback);
+          if (!seenSignatures.has(fbSig)) {
+            seenSignatures.add(fbSig);
+            wrongViews.push(fallback);
+          }
         }
 
         let finalOptions = [
@@ -721,7 +756,9 @@
       const controls = new THREE.OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.05;
-      controls.enableZoom = false;
+      controls.enableZoom = true;
+      controls.minDistance = 2;
+      controls.maxDistance = 25;
       controls.maxPolarAngle = Math.PI / 2 - 0.05;
 
       scene.add(new THREE.AmbientLight(0xffffff, 0.5));
