@@ -264,8 +264,8 @@
       /**
        * ENGINEER & TEACHER DESIGN:
        * 1. Dynamic Procedural Generation: Logic.js engine fully integrated.
-       * 2. Auto-Scaling Canvas: Dynamically scales 2D Blueprints based on random structure size.
-       * 3. Progression System: Levels depend strictly on the allowed shapes.
+       * 2. Intelligent Distractors: Mutates views (shifts blocks) if 3D shapes are too symmetrical.
+       * 3. Auto-Scaling Canvas: Dynamically scales 2D Blueprints based on random structure size.
        */
 
       const CONSTANT_COLOR = "#FBBF24"; // Amber
@@ -495,8 +495,36 @@
         return view.map((s) => ({ ...s, x: -s.x }));
       }
 
+      // --- NEW MUTATION LOGIC ---
+      // Deep clones a 2D view
+      function cloneView(view) {
+        return view.map((s) => ({ ...s }));
+      }
+
+      // Shifts a random block in the view by 1 unit to create plausible wrong answers
+      function mutateView(view) {
+        if (!view || view.length === 0)
+          return [{ type: "rect", x: 0, y: 0, w: 1, h: 1 }];
+
+        let mutated = cloneView(view);
+        let targetIdx = Math.floor(Math.random() * mutated.length);
+        let shapeToMutate = mutated[targetIdx];
+
+        // Randomly shift X or Y position by 1 unit
+        if (Math.random() > 0.5) {
+          shapeToMutate.x += Math.random() > 0.5 ? 1 : -1;
+        } else {
+          shapeToMutate.y += Math.random() > 0.5 ? 1 : -1;
+        }
+
+        return centerShapes2D(mutated);
+      }
+
       function generateOptions(elements, targetViewType) {
-        let correctView = generateView(elements, targetViewType);
+        let correctView = centerShapes2D(
+          generateView(elements, targetViewType),
+        );
+
         let pool = [
           generateView(elements, "front"),
           generateView(elements, "top"),
@@ -508,7 +536,7 @@
 
         let extendedPool = [];
         for (let view of pool) {
-          extendedPool.push(view);
+          extendedPool.push(centerShapes2D(view));
           extendedPool.push(centerShapes2D(rotateView(view)));
           extendedPool.push(centerShapes2D(mirrorViewX(view)));
         }
@@ -516,6 +544,7 @@
         let uniqueMap = new Map();
         let correctStr = JSON.stringify(correctView);
 
+        // 1. Gather all strictly unique real views (ignoring duplicates like symmetrical M-shapes)
         for (let view of extendedPool) {
           let str = JSON.stringify(view);
           if (str !== correctStr && !uniqueMap.has(str) && view.length > 0) {
@@ -525,21 +554,55 @@
 
         let wrongViews = Array.from(uniqueMap.values());
         shuffleArray(wrongViews);
+        wrongViews = wrongViews.slice(0, 3); // Take at most 3 standard distractor views
 
-        // Noise fallback if shape is too symmetrical
+        // 2. If we don't have enough wrong views (because of extreme symmetry), mutate!
+        let safetyCounter = 0;
+        let sourceViewsForMutation = [correctView, ...wrongViews];
+
+        while (wrongViews.length < 3 && safetyCounter < 50) {
+          // Pick a random valid view and shift one of its blocks
+          let baseView =
+            sourceViewsForMutation[
+              Math.floor(Math.random() * sourceViewsForMutation.length)
+            ];
+          let mutatedView = mutateView(baseView);
+          let mutStr = JSON.stringify(mutatedView);
+
+          // If this mutated view is completely unique, add it to our distractor options
+          if (mutStr !== correctStr && !uniqueMap.has(mutStr)) {
+            uniqueMap.set(mutStr, mutatedView);
+            wrongViews.push(mutatedView);
+            sourceViewsForMutation.push(mutatedView);
+          }
+          safetyCounter++;
+        }
+
+        // Absolute fallback for extreme edge cases (like a single block)
         while (wrongViews.length < 3) {
-          wrongViews.push(
-            centerShapes2D([
-              { type: "rect", x: Math.random(), y: Math.random(), w: 1, h: 2 },
-            ]),
-          );
+          let fallback = [
+            {
+              type: "rect",
+              x: Math.floor(Math.random() * 3) - 1,
+              y: Math.floor(Math.random() * 3) - 1,
+              w: 1,
+              h: 1,
+            },
+          ];
+          if (Math.random() > 0.5)
+            fallback.push({
+              type: "rect",
+              x: Math.floor(Math.random() * 3) - 1,
+              y: Math.floor(Math.random() * 3) - 1,
+              w: 1,
+              h: 1,
+            });
+          wrongViews.push(centerShapes2D(fallback));
         }
 
         let finalOptions = [
           { correct: true, shapes2d: correctView },
-          ...wrongViews
-            .slice(0, 3)
-            .map((v) => ({ correct: false, shapes2d: v })),
+          ...wrongViews.map((v) => ({ correct: false, shapes2d: v })),
         ];
 
         shuffleArray(finalOptions);
