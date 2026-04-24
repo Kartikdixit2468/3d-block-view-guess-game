@@ -1,0 +1,1260 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Math Bridges: 3D Views Explorer!</title>
+    <!-- Tailwind CSS for rapid UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Three.js for 3D rendering -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- OrbitControls for dragging/rotating -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <!-- Canvas Confetti for celebrations -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@400;700&display=swap");
+
+      body {
+        font-family: "Nunito", sans-serif;
+        background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        overflow: hidden; /* Prevent scrolling, act like an app */
+        touch-action: none;
+      }
+
+      h1,
+      h2,
+      h3,
+      .brand-font {
+        font-family: "Fredoka One", cursive;
+      }
+
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(12px);
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        border-radius: 24px;
+      }
+
+      .mcq-btn {
+        transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        background: white;
+        border: 4px solid transparent;
+      }
+
+      .mcq-btn:hover {
+        transform: scale(1.05) translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+      }
+
+      .mcq-btn.correct {
+        border-color: #10b981;
+        background-color: #d1fae5;
+      }
+
+      .mcq-btn.wrong {
+        border-color: #ef4444;
+        background-color: #fee2e2;
+        animation: shake 0.4s;
+      }
+
+      @keyframes shake {
+        0% {
+          transform: translateX(0);
+        }
+        25% {
+          transform: translateX(-8px);
+        }
+        50% {
+          transform: translateX(8px);
+        }
+        75% {
+          transform: translateX(-8px);
+        }
+        100% {
+          transform: translateX(0);
+        }
+      }
+
+      #canvas-container {
+        position: relative;
+        cursor: grab;
+        width: 100%;
+        height: 100%;
+      }
+
+      #canvas-container:active {
+        cursor: grabbing;
+      }
+
+      @media (max-width: 768px) {
+        .game-layout {
+          flex-direction: column;
+        }
+        .left-panel {
+          flex: none;
+          height: 45vh;
+        }
+        .right-panel {
+          flex: 1;
+          min-height: 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="h-screen w-screen flex flex-col text-gray-800">
+    <!-- Header -->
+    <header
+      class="w-full p-3 md:p-4 flex justify-between items-center glass-panel rounded-none z-10 relative shrink-0"
+    >
+      <div class="flex items-center gap-2 md:gap-3">
+        <div
+          class="w-10 h-10 md:w-12 md:h-12 bg-white rounded-full flex items-center justify-center shadow-sm text-sky-500"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path
+              d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"
+            />
+            <path d="m3.3 7 8.7 5 8.7-5" />
+            <path d="M12 22V12" />
+          </svg>
+        </div>
+        <h1 class="text-xl md:text-3xl text-sky-600 drop-shadow-sm truncate">
+          Shape Explorer!
+        </h1>
+      </div>
+      <div
+        class="text-sm md:text-xl brand-font bg-white px-3 py-2 rounded-full shadow-sm text-sky-500 whitespace-nowrap flex flex-col md:flex-row items-end md:items-center gap-1 md:gap-2"
+      >
+        <span id="level-title-display" class="text-gray-500">Level 1</span>
+        <span class="text-sky-600 bg-sky-100 px-2 rounded-full"
+          ><span id="q-current">1</span>/<span id="q-total">5</span></span
+        >
+      </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main
+      class="flex-1 flex game-layout p-3 md:p-6 gap-3 md:gap-6 max-h-full overflow-hidden min-h-0"
+    >
+      <!-- Left Side: 3D Interaction -->
+      <section
+        class="left-panel flex-1 glass-panel flex flex-col overflow-hidden relative shadow-lg"
+      >
+        <div
+          class="absolute top-2 left-2 right-2 md:top-4 md:left-4 md:right-4 z-10 flex justify-between pointer-events-none"
+        >
+          <div
+            class="bg-white/90 px-3 py-1.5 rounded-2xl shadow font-bold text-xs md:text-sm text-gray-600 pointer-events-auto border-2 border-sky-100 flex gap-2 items-center"
+          >
+            <span class="flex items-center">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                class="inline mr-1"
+              >
+                <path d="M22 14a8 8 0 0 1-8 8" />
+                <path d="M18 11v-1a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+                <path d="M14 10V9a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v1" />
+                <path d="M10 9.5V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v10" />
+                <path
+                  d="M18 11a2 2 0 1 1 4 0v3a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"
+                />
+              </svg>
+              Drag to look!
+            </span>
+          </div>
+        </div>
+
+        <div
+          id="canvas-container"
+          class="flex-1 rounded-2xl overflow-hidden min-h-0"
+        ></div>
+
+        <div
+          class="bg-sky-600 text-white p-3 md:p-6 text-center shadow-inner relative overflow-hidden shrink-0"
+        >
+          <div
+            class="absolute top-0 left-0 w-full h-full opacity-20"
+            style="
+              background-image: radial-gradient(
+                circle,
+                white 2px,
+                transparent 2px
+              );
+              background-size: 20px 20px;
+            "
+          ></div>
+          <h2 id="question-text" class="text-xl md:text-4xl relative z-10">
+            Which one is the TOP view?
+          </h2>
+        </div>
+      </section>
+
+      <!-- Right Side: MCQ Options -->
+      <section
+        class="right-panel w-full md:w-[40%] glass-panel p-3 md:p-6 flex flex-col gap-3 md:gap-4 shadow-lg overflow-hidden"
+      >
+        <h3
+          class="text-lg md:text-xl font-bold text-gray-700 text-center shrink-0"
+        >
+          Choose the correct 2D shape:
+        </h3>
+
+        <div
+          id="options-container"
+          class="grid grid-cols-2 gap-2 md:gap-4 flex-1 min-h-0 options-grid"
+        >
+          <!-- Buttons injected by JS -->
+        </div>
+
+        <div
+          id="feedback-area"
+          class="hidden flex-col items-center justify-center flex-1 min-h-0 w-full p-4 bg-white rounded-2xl border-4 border-sky-100"
+        >
+          <p
+            id="feedback-text"
+            class="text-xl md:text-2xl brand-font mb-4 text-center"
+          ></p>
+          <button
+            id="next-btn"
+            class="brand-font flex items-center justify-center bg-sky-500 hover:bg-sky-400 text-white text-lg md:text-xl py-2 md:py-3 px-6 md:px-8 rounded-full shadow-[0_6px_0_#0ea5e9] hover:shadow-[0_2px_0_#0ea5e9] hover:translate-y-1 transition-all shrink-0"
+          >
+            Next Challenge!
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="20"
+              height="20"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="inline ml-1"
+            >
+              <path d="M5 12h14" />
+              <path d="m12 5 7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      /**
+       * ENGINEER & TEACHER DESIGN:
+       * 1. 3-Stage Progressive Difficulty
+       * 2. Custom 3D & 2D rendering pipeline for mixed shapes (Cylinders, Cones, Pyramids, Cubes)
+       * 3. Flat design, no shadows, constant colors.
+       */
+
+      const CONSTANT_COLOR = "#FBBF24"; // Amber
+
+      // GAME DATABASE
+      // 2D Coordinates format: center is (0,0). Y goes DOWN in Canvas.
+      const gameData = [
+        {
+          title: "Level 1: Block Master",
+          questions: [
+            {
+              question: "Which one is the FRONT view?",
+              elements: [
+                { type: "cube", pos: [0, 0, 0] },
+                { type: "cube", pos: [1, 0, 0] },
+                { type: "cube", pos: [0, 1, 0] },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: -1, w: 1, h: 1 },
+                  ],
+                }, // L shape
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                  ],
+                }, // Line
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 2, h: 2 }],
+                }, // Large square
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: -1, w: 1, h: 1 },
+                  ],
+                }, // Reverse L
+              ],
+            },
+            {
+              question: "Which one is the TOP view?",
+              elements: [
+                { type: "cube", pos: [-1, 0, 0] },
+                { type: "cube", pos: [-1, 0, 1] },
+                { type: "cube", pos: [0, 0, 1] },
+                { type: "cube", pos: [1, 0, 1] },
+                { type: "cube", pos: [1, 0, 0] },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: -1, w: 1, h: 1 },
+                    { type: "rect", x: -1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: -1, w: 1, h: 1 },
+                  ],
+                }, // U shape
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 1 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 3 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: 1, w: 1, h: 1 },
+                  ],
+                }, // T shape
+              ],
+            },
+            {
+              question: "Which one is the SIDE (Right) view?",
+              elements: [
+                { type: "cube", pos: [0, 0, 0] },
+                { type: "cube", pos: [0, 0, -1] },
+                { type: "cube", pos: [0, 1, -1] },
+                { type: "cube", pos: [0, 0, -2] },
+                { type: "cube", pos: [0, 1, -2] },
+                { type: "cube", pos: [0, 2, -2] },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: -1, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: -1, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: -2, w: 1, h: 1 },
+                  ],
+                }, // Stairs
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: 0, w: 1, h: 3 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 2 },
+                    { type: "rect", x: 1, y: 0, w: 1, h: 1 },
+                  ],
+                }, // Reverse stairs
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 3 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the TOP view?",
+              elements: [
+                { type: "cube", pos: [-1, 0, -1] },
+                { type: "cube", pos: [0, 0, -1] },
+                { type: "cube", pos: [1, 0, -1] },
+                { type: "cube", pos: [-1, 0, 0] },
+                { type: "cube", pos: [1, 0, 0] },
+                { type: "cube", pos: [-1, 0, 1] },
+                { type: "cube", pos: [0, 0, 1] },
+                { type: "cube", pos: [1, 0, 1] },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 0, w: 3, h: 3 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1, color: "#fff" },
+                  ],
+                }, // 3x3 with hole
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 3 }],
+                }, // Solid 3x3
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 2, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "circle", x: 0, y: 0, r: 1.5 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the FRONT view?",
+              elements: [
+                { type: "cube", pos: [-1, 0, 0] },
+                { type: "cube", pos: [-1, 1, 0] },
+                { type: "cube", pos: [-1, 2, 0] },
+                { type: "cube", pos: [0, 2, 0] },
+                { type: "cube", pos: [1, 2, 0] },
+                { type: "cube", pos: [1, 1, 0] },
+                { type: "cube", pos: [1, 0, 0] },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: -1, w: 1, h: 3 },
+                    { type: "rect", x: 0, y: -2, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: -1, w: 1, h: 3 },
+                  ],
+                }, // Archway
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: -1, w: 3, h: 3 }],
+                }, // Solid
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: -1, y: -1, w: 1, h: 3 },
+                    { type: "rect", x: 0, y: 0, w: 1, h: 1 },
+                    { type: "rect", x: 1, y: -1, w: 1, h: 3 },
+                  ],
+                }, // U Shape
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 1 }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          title: "Level 2: Curves & Points",
+          questions: [
+            {
+              question: "Which one is the TOP view of the Cylinder?",
+              elements: [
+                { type: "cylinder", pos: [0, 0, 0], radius: 1.5, height: 2 },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [{ type: "circle", x: 0, y: 0, r: 1.5 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "triangle", x: 0, y: 0, w: 3, h: 3 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "coneTop", x: 0, y: 0, r: 1.5 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the FRONT view of the Cylinder?",
+              elements: [
+                { type: "cylinder", pos: [0, 0, 0], radius: 1.5, height: 2 },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "circle", x: 0, y: 0, r: 1.5 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "triangle", x: 0, y: 0, w: 3, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 1.5, h: 2 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the TOP view of the Cone?",
+              elements: [
+                { type: "cone", pos: [0, 0, 0], radius: 1.5, height: 2 },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [{ type: "coneTop", x: 0, y: 0, r: 1.5 }],
+                }, // Circle with dot
+                {
+                  correct: false,
+                  shapes2d: [{ type: "circle", x: 0, y: 0, r: 1.5 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "triangle", x: 0, y: 0, w: 3, h: 3 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "pyramidTop", x: 0, y: 0, w: 3 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the FRONT view of the Cone?",
+              elements: [
+                { type: "cone", pos: [0, 0, 0], radius: 1.5, height: 2 },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [{ type: "triangle", x: 0, y: 0, w: 3, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "coneTop", x: 0, y: 0, r: 1.5 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 3, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "pyramidTop", x: 0, y: 0, w: 3 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the TOP view of the Pyramid?",
+              elements: [
+                { type: "pyramid", pos: [0, 0, 0], radius: 1.414, height: 2 },
+              ], // radius=1.414 makes base 2x2
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [{ type: "pyramidTop", x: 0, y: 0, w: 2 }],
+                }, // Square with X
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 2, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "coneTop", x: 0, y: 0, r: 1.414 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "triangle", x: 0, y: 0, w: 2, h: 2 }],
+                },
+              ],
+            },
+          ],
+        },
+        {
+          title: "Level 3: Master Architect",
+          questions: [
+            {
+              question: "Which one is the FRONT view?",
+              elements: [
+                { type: "cube", pos: [0, 0, 0], size: [2, 2, 2] },
+                { type: "pyramid", pos: [0, 2, 0], radius: 1.414, height: 2 },
+              ], // House
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 1, w: 2, h: 2 },
+                    { type: "triangle", x: 0, y: -1, w: 2, h: 2 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 1, w: 2, h: 2 },
+                    { type: "circle", x: 0, y: -1, r: 1 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 2, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "triangle", x: 0, y: 1, w: 2, h: 2 },
+                    { type: "rect", x: 0, y: -1, w: 2, h: 2 },
+                  ],
+                }, // Upside down
+              ],
+            },
+            {
+              question: "Which one is the TOP view?",
+              elements: [
+                { type: "cylinder", pos: [0, 0, 0], radius: 1, height: 3 },
+                { type: "cone", pos: [0, 2.5, 0], radius: 1, height: 2 },
+              ], // Rocket
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [{ type: "coneTop", x: 0, y: 0, r: 1 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "circle", x: 0, y: 0, r: 1 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "pyramidTop", x: 0, y: 0, w: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 2, h: 3 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the SIDE (Right) view?",
+              elements: [
+                { type: "cylinder", pos: [0, 0, 0], radius: 2, height: 1 },
+                { type: "cylinder", pos: [0, 1, 0], radius: 1, height: 1 },
+              ], // Stacked Discs
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 0.5, w: 4, h: 1 },
+                    { type: "rect", x: 0, y: -0.5, w: 2, h: 1 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "circle", x: 0, y: 0, r: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 4, h: 2 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "coneTop", x: 0, y: 0, r: 2 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the FRONT view?",
+              elements: [
+                { type: "cube", pos: [0, 0, 0], size: [4, 1, 2] },
+                { type: "cylinder", pos: [-1, 1.5, 0], radius: 0.5, height: 2 },
+                { type: "cylinder", pos: [1, 1.5, 0], radius: 0.5, height: 2 },
+              ], // The Factory
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 1, w: 4, h: 1 },
+                    { type: "rect", x: -1, y: -0.5, w: 1, h: 2 },
+                    { type: "rect", x: 1, y: -0.5, w: 1, h: 2 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 1, w: 4, h: 1 },
+                    { type: "circle", x: -1, y: -0.5, r: 0.5 },
+                    { type: "circle", x: 1, y: -0.5, r: 0.5 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 1, w: 4, h: 1 },
+                    { type: "rect", x: 0, y: -0.5, w: 1, h: 2 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 4, h: 1 }],
+                },
+              ],
+            },
+            {
+              question: "Which one is the TOP view of this Castle Tower?",
+              elements: [
+                { type: "cylinder", pos: [0, 0, 0], radius: 1.5, height: 2 },
+                { type: "cube", pos: [0, 1.5, 0], size: [4, 1, 1] },
+                { type: "cone", pos: [0, 3, 0], radius: 1, height: 2 },
+              ],
+              options: [
+                {
+                  correct: true,
+                  shapes2d: [
+                    { type: "circle", x: 0, y: 0, r: 1.5 },
+                    { type: "rect", x: 0, y: 0, w: 4, h: 1 },
+                    { type: "coneTop", x: 0, y: 0, r: 1 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "circle", x: 0, y: 0, r: 1.5 },
+                    { type: "coneTop", x: 0, y: 0, r: 1 },
+                  ],
+                },
+                {
+                  correct: false,
+                  shapes2d: [{ type: "rect", x: 0, y: 0, w: 4, h: 4 }],
+                },
+                {
+                  correct: false,
+                  shapes2d: [
+                    { type: "rect", x: 0, y: 0, w: 3, h: 2 },
+                    { type: "rect", x: 0, y: -1.5, w: 4, h: 1 },
+                    { type: "triangle", x: 0, y: -3, w: 2, h: 2 },
+                  ],
+                }, // This is front view!
+              ],
+            },
+          ],
+        },
+      ];
+
+      let currentStageIndex = 0;
+      let currentQuestionIndex = 0;
+
+      // --- AUDIO SYNTHESIZER ---
+      function playSound(type) {
+        try {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          if (type === "correct") {
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(
+              1046.5,
+              ctx.currentTime + 0.1,
+            );
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.5);
+          } else if (type === "wrong") {
+            osc.type = "triangle";
+            osc.frequency.setValueAtTime(200, ctx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(
+              150,
+              ctx.currentTime + 0.2,
+            );
+            gain.gain.setValueAtTime(0.3, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+          } else if (type === "win") {
+            osc.type = "square";
+            gain.gain.setValueAtTime(0.2, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
+            const notes = [440, 554.37, 659.25, 880];
+            notes.forEach((freq, i) => {
+              osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.1);
+            });
+            osc.start();
+            osc.stop(ctx.currentTime + 1);
+          }
+        } catch (e) {
+          console.log("Audio skipped");
+        }
+      }
+
+      // --- THREE.JS ENGINE ---
+      const container = document.getElementById("canvas-container");
+      const scene = new THREE.Scene();
+      scene.background = new THREE.Color(0xdcf0fb);
+      scene.fog = new THREE.FogExp2(0xdcf0fb, 0.03);
+
+      const camera = new THREE.PerspectiveCamera(
+        45,
+        container.clientWidth / container.clientHeight,
+        0.1,
+        100,
+      );
+      camera.position.set(6, 6, 8);
+
+      const renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+      });
+      renderer.setSize(container.clientWidth, container.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      container.appendChild(renderer.domElement);
+
+      const controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.enableZoom = false;
+      controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.9);
+      dirLight.position.set(-8, 15, 10);
+      scene.add(dirLight);
+
+      // Ground Plane & Grid
+      const planeGeo = new THREE.PlaneGeometry(100, 100);
+      const planeMat = new THREE.MeshLambertMaterial({ color: 0xf8fafc });
+      const ground = new THREE.Mesh(planeGeo, planeMat);
+      ground.rotation.x = -Math.PI / 2;
+      ground.position.y = 0;
+      scene.add(ground);
+
+      const gridHelper = new THREE.GridHelper(40, 40, 0x94a3b8, 0xcbd5e1);
+      gridHelper.position.y = 0.01;
+      scene.add(gridHelper);
+
+      let shapeGroup = new THREE.Group();
+      scene.add(shapeGroup);
+
+      // Avatar
+      function createHuman() {
+        const group = new THREE.Group();
+        const mat = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), mat);
+        head.position.y = 1.6;
+        group.add(head);
+        const body = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.12, 0.12, 0.7),
+          mat,
+        );
+        body.position.y = 1.05;
+        group.add(body);
+        const armGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.6);
+        const armL = new THREE.Mesh(armGeo, mat);
+        armL.position.set(-0.2, 1.05, 0);
+        const armR = new THREE.Mesh(armGeo, mat);
+        armR.position.set(0.2, 1.05, 0);
+        group.add(armL);
+        group.add(armR);
+        const legGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.7);
+        const legL = new THREE.Mesh(legGeo, mat);
+        legL.position.set(-0.1, 0.35, 0);
+        const legR = new THREE.Mesh(legGeo, mat);
+        legR.position.set(0.1, 0.35, 0);
+        group.add(legL);
+        group.add(legR);
+        return group;
+      }
+
+      let humanSilhouette = createHuman();
+      scene.add(humanSilhouette);
+
+      const solidMaterial = new THREE.MeshStandardMaterial({
+        color: CONSTANT_COLOR,
+        roughness: 0.4,
+      });
+      const edgeMat = new THREE.LineBasicMaterial({
+        color: 0x000000,
+        linewidth: 2,
+      });
+
+      function buildShape(elementsArray) {
+        while (shapeGroup.children.length > 0) {
+          shapeGroup.remove(shapeGroup.children[0]);
+        }
+
+        let minX = Infinity,
+          maxX = -Infinity;
+        let minY = Infinity,
+          maxY = -Infinity;
+        let minZ = Infinity,
+          maxZ = -Infinity;
+
+        elementsArray.forEach((el) => {
+          const [x, y, z] = el.pos;
+          let geo;
+          let w = 1,
+            h = 1,
+            d = 1;
+
+          // Dynamic Geometry generation based on shape type
+          if (el.type === "cube" || !el.type) {
+            w = el.size ? el.size[0] : 1;
+            h = el.size ? el.size[1] : 1;
+            d = el.size ? el.size[2] : 1;
+            geo = new THREE.BoxGeometry(w, h, d);
+          } else if (el.type === "cylinder") {
+            w = (el.radius || 0.5) * 2;
+            d = w;
+            h = el.height || 1;
+            geo = new THREE.CylinderGeometry(
+              el.radius || 0.5,
+              el.radius || 0.5,
+              h,
+              32,
+            );
+          } else if (el.type === "cone") {
+            w = (el.radius || 0.5) * 2;
+            d = w;
+            h = el.height || 1;
+            geo = new THREE.ConeGeometry(el.radius || 0.5, h, 32);
+          } else if (el.type === "pyramid") {
+            w = (el.radius || 0.707) * 2;
+            d = w;
+            h = el.height || 1;
+            geo = new THREE.ConeGeometry(el.radius || 0.707, h, 4);
+            geo.rotateY(Math.PI / 4); // Align flat sides
+          }
+
+          // Calculate bounds for centering
+          minX = Math.min(minX, x - w / 2);
+          maxX = Math.max(maxX, x + w / 2);
+          minY = Math.min(minY, y - h / 2);
+          maxY = Math.max(maxY, y + h / 2);
+          minZ = Math.min(minZ, z - d / 2);
+          maxZ = Math.max(maxZ, z + d / 2);
+
+          const mesh = new THREE.Mesh(geo, solidMaterial);
+          mesh.position.set(x, y, z);
+
+          const edgesGeo = new THREE.EdgesGeometry(geo);
+          const edges = new THREE.LineSegments(edgesGeo, edgeMat);
+          edges.position.set(x, y, z);
+
+          shapeGroup.add(mesh);
+          shapeGroup.add(edges);
+        });
+
+        // Center group
+        const centerX = (minX + maxX) / 2;
+        const centerY = (minY + maxY) / 2;
+        const centerZ = (minZ + maxZ) / 2;
+        shapeGroup.children.forEach((child) => {
+          child.position.x -= centerX;
+          child.position.y -= centerY;
+          child.position.z -= centerZ;
+        });
+
+        const totalHeight = maxY - minY;
+        shapeGroup.position.y = totalHeight / 2;
+
+        const totalDepth = maxZ - minZ;
+        humanSilhouette.position.set(0, 0, totalDepth / 2 + 2.5);
+
+        const maxDim = Math.max(maxX - minX, maxY - minY, maxZ - minZ);
+        camera.position.set(
+          maxDim * 1.5 + 4,
+          maxDim * 1.5 + 4,
+          maxDim * 1.5 + 6,
+        );
+        controls.target.set(0, totalHeight / 2, 0);
+        controls.update();
+      }
+
+      function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      window.addEventListener("resize", () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.render(scene, camera);
+      });
+
+      // --- 4. 2D CANVAS DRAWING ENGINE ---
+      function draw2DShapes(canvas, shapesArray, baseColor) {
+        const ctx = canvas.getContext("2d");
+        const w = canvas.width;
+        const h = canvas.height;
+
+        ctx.clearRect(0, 0, w, h);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#000000";
+
+        // Map 1 unit to 28 pixels to fit nicely inside the 200x200 canvas
+        const scale = 28;
+
+        ctx.save();
+        ctx.translate(w / 2, h / 2); // Origin at center
+
+        shapesArray.forEach((shape) => {
+          const sx = shape.x * scale;
+          const sy = shape.y * scale;
+          ctx.fillStyle = shape.color || baseColor;
+
+          ctx.beginPath();
+          if (shape.type === "rect") {
+            const sw = shape.w * scale;
+            const sh = shape.h * scale;
+            ctx.rect(sx - sw / 2, sy - sh / 2, sw, sh);
+            ctx.fill();
+            ctx.stroke();
+
+            // Highlights for flat solid shapes
+            if (shape.color !== "#fff") {
+              ctx.fillStyle = "rgba(255,255,255,0.3)";
+              ctx.beginPath();
+              ctx.rect(sx - sw / 2 + 2, sy - sh / 2 + 2, sw - 4, sh / 4);
+              ctx.fill();
+            }
+          } else if (shape.type === "circle") {
+            const sr = shape.r * scale;
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+          } else if (shape.type === "triangle") {
+            const sw = shape.w * scale;
+            const sh = shape.h * scale;
+            ctx.moveTo(sx, sy - sh / 2);
+            ctx.lineTo(sx + sw / 2, sy + sh / 2);
+            ctx.lineTo(sx - sw / 2, sy + sh / 2);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+          } else if (shape.type === "pyramidTop") {
+            const sw = shape.w * scale;
+            ctx.rect(sx - sw / 2, sy - sw / 2, sw, sw);
+            ctx.fill();
+            ctx.stroke();
+            // Draw the "X" defining the pyramid ridges
+            ctx.beginPath();
+            ctx.moveTo(sx - sw / 2, sy - sw / 2);
+            ctx.lineTo(sx + sw / 2, sy + sw / 2);
+            ctx.moveTo(sx + sw / 2, sy - sw / 2);
+            ctx.lineTo(sx - sw / 2, sy + sw / 2);
+            ctx.stroke();
+          } else if (shape.type === "coneTop") {
+            const sr = shape.r * scale;
+            ctx.arc(sx, sy, sr, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+            // Draw the tip dot
+            ctx.beginPath();
+            ctx.arc(sx, sy, 3, 0, Math.PI * 2);
+            ctx.fillStyle = "#000";
+            ctx.fill();
+          }
+        });
+
+        ctx.restore();
+      }
+
+      // --- GAME LOGIC ---
+      function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [array[i], array[j]] = [array[j], array[i]];
+        }
+      }
+
+      function loadQuestion() {
+        const currentStage = gameData[currentStageIndex];
+        const currentQuestion = currentStage.questions[currentQuestionIndex];
+
+        // Update UI
+        document.getElementById("level-title-display").innerText =
+          currentStage.title;
+        document.getElementById("q-current").innerText =
+          currentQuestionIndex + 1;
+        document.getElementById("q-total").innerText =
+          currentStage.questions.length;
+        document.getElementById("question-text").innerText =
+          currentQuestion.question;
+
+        const optsContainer = document.getElementById("options-container");
+        optsContainer.innerHTML = "";
+        document.getElementById("feedback-area").classList.add("hidden");
+        optsContainer.style.display = "grid";
+
+        // Build 3D Shape
+        buildShape(currentQuestion.elements);
+
+        // Prepare Options
+        let options = [...currentQuestion.options];
+        shuffleArray(options);
+
+        options.forEach((opt, i) => {
+          const btn = document.createElement("button");
+          btn.className =
+            "mcq-btn rounded-xl flex items-center justify-center p-2 relative w-full h-full";
+          btn.onclick = () => handleAnswer(opt.correct, btn);
+
+          const canvas = document.createElement("canvas");
+          canvas.width = 200;
+          canvas.height = 200;
+          canvas.className = "w-full h-full object-contain pointer-events-none";
+
+          btn.appendChild(canvas);
+          optsContainer.appendChild(btn);
+
+          setTimeout(() => {
+            draw2DShapes(canvas, opt.shapes2d, CONSTANT_COLOR);
+          }, 10);
+        });
+      }
+
+      function handleAnswer(isCorrect, btnElement) {
+        const buttons = document.querySelectorAll(".mcq-btn");
+        buttons.forEach((b) => (b.disabled = true));
+
+        if (isCorrect) {
+          playSound("correct");
+          btnElement.classList.add("correct");
+
+          const rect = btnElement.getBoundingClientRect();
+          confetti({
+            particleCount: 50,
+            spread: 60,
+            origin: {
+              x: (rect.left + rect.width / 2) / window.innerWidth,
+              y: (rect.top + rect.height / 2) / window.innerHeight,
+            },
+            colors: ["#3B82F6", "#EF4444", "#10B981", "#F59E0B"],
+          });
+
+          showFeedback(true);
+        } else {
+          playSound("wrong");
+          btnElement.classList.add("wrong");
+
+          setTimeout(() => {
+            btnElement.classList.remove("wrong");
+            buttons.forEach((b) => (b.disabled = false));
+          }, 500);
+        }
+      }
+
+      function showFeedback(isCorrect) {
+        document.getElementById("options-container").style.display = "none";
+        const feedbackArea = document.getElementById("feedback-area");
+        const feedbackText = document.getElementById("feedback-text");
+        const nextBtn = document.getElementById("next-btn");
+
+        feedbackArea.classList.remove("hidden");
+        feedbackArea.classList.add("flex");
+
+        const currentStage = gameData[currentStageIndex];
+        const isLastQuestionInStage =
+          currentQuestionIndex === currentStage.questions.length - 1;
+        const isLastStage = currentStageIndex === gameData.length - 1;
+
+        if (!isLastQuestionInStage) {
+          feedbackText.innerHTML = "Brilliant! You found it!";
+          feedbackText.className =
+            "text-xl md:text-2xl brand-font mb-4 text-center text-green-500";
+          nextBtn.innerHTML = `Next Challenge! <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline ml-1"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`;
+          nextBtn.onclick = () => {
+            currentQuestionIndex++;
+            loadQuestion();
+          };
+        } else if (!isLastStage) {
+          playSound("win");
+          feedbackText.innerHTML = `🎉 Level Complete! 🎉<br><span class='text-lg text-gray-600'>Get ready for ${gameData[currentStageIndex + 1].title}!</span>`;
+          feedbackText.className =
+            "text-2xl md:text-3xl brand-font mb-4 text-center text-indigo-600";
+          nextBtn.innerHTML = `Start Next Level <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline ml-1"><path d="m9 18 6-6-6-6"/></svg>`;
+          nextBtn.onclick = () => {
+            currentStageIndex++;
+            currentQuestionIndex = 0;
+            loadQuestion();
+          };
+          confettiBurst();
+        } else {
+          playSound("win");
+          feedbackText.innerHTML =
+            "🏆 GAME BEATEN! 🏆<br><span class='text-lg text-gray-600'>You are the ultimate 3D Master!</span>";
+          feedbackText.className =
+            "text-2xl md:text-3xl brand-font mb-4 text-center text-sky-600";
+          nextBtn.innerHTML = `Play Again! <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline ml-1"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`;
+          nextBtn.onclick = () => {
+            currentStageIndex = 0;
+            currentQuestionIndex = 0;
+            loadQuestion();
+          };
+          confettiBurst();
+        }
+      }
+
+      function confettiBurst() {
+        var duration = 3000;
+        var end = Date.now() + duration;
+        (function frame() {
+          confetti({
+            particleCount: 5,
+            angle: 60,
+            spread: 55,
+            origin: { x: 0 },
+            colors: ["#3B82F6", "#EF4444", "#10B981"],
+          });
+          confetti({
+            particleCount: 5,
+            angle: 120,
+            spread: 55,
+            origin: { x: 1 },
+            colors: ["#3B82F6", "#EF4444", "#10B981"],
+          });
+          if (Date.now() < end) {
+            requestAnimationFrame(frame);
+          }
+        })();
+      }
+
+      // --- INIT GAME ---
+      window.onload = () => {
+        loadQuestion();
+        animate();
+      };
+    </script>
+  </body>
+</html>
